@@ -1,4 +1,4 @@
-module github.com/gjbae1212/fluent-bit-pubsub
+module github.com/ragi256/fluent-bit-pubsub
 
 require (
 	cloud.google.com/go/pubsub v1.30.0
