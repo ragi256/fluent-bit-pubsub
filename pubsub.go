@@ -58,11 +58,14 @@ func NewKeeper(projectId, topicName, jwtPath string,
 		topic.PublishSettings = pubsub.DefaultPublishSettings
 	}
 
-	cfg, err := topic.Config(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("topic.Config err: %v", err)
+	var encoding pubsub.SchemaEncoding
+	if schemaConfig.Definition != "" {
+		cfg, err := topic.Config(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("topic.Config err: %v", err)
+		}
+		encoding = cfg.SchemaSettings.Encoding
 	}
-	encoding := cfg.SchemaSettings.Encoding
 
 	var codec func(record CodecRecord) ([]byte, error)
 	var pubs *GooglePubSub
