@@ -19,6 +19,7 @@ var (
 	plugin   Keeper
 	hostname string
 	wrapper  = OutputWrapper(&Output{})
+	secret   Secret
 
 	timeout        = pubsub.DefaultPublishSettings.Timeout
 	delayThreshold = pubsub.DefaultPublishSettings.DelayThreshold
@@ -29,6 +30,11 @@ var (
 	schemaType       pubsub.SchemaType
 	schemaDefinition string
 )
+
+type Secret struct {
+	jwtPath string
+	jwt     string
+}
 
 type Output struct{}
 
@@ -65,7 +71,8 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 	var err error
 	project := wrapper.GetConfigKey(ctx, "Project")
 	topic := wrapper.GetConfigKey(ctx, "Topic")
-	jwtPath := wrapper.GetConfigKey(ctx, "JwtPath")
+	secret.jwt = wrapper.GetConfigKey(ctx, "Jwt")
+	secret.jwtPath = wrapper.GetConfigKey(ctx, "JwtPath")
 	dg := wrapper.GetConfigKey(ctx, "Debug")
 	to := wrapper.GetConfigKey(ctx, "Timeout")
 	bt := wrapper.GetConfigKey(ctx, "ByteThreshold")
@@ -76,7 +83,8 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 
 	fmt.Printf("[pubsub-go] plugin parameter project = '%s'\n", project)
 	fmt.Printf("[pubsub-go] plugin parameter topic = '%s'\n", topic)
-	fmt.Printf("[pubsub-go] plugin parameter jwtPath = '%s'\n", jwtPath)
+	fmt.Printf("[pubsub-go] plugin parameter jwt = ****\n")
+	fmt.Printf("[pubsub-go] plugin parameter jwtPath = '%s'\n", secret.jwtPath)
 	fmt.Printf("[pubsub-go] plugin parameter debug = '%s'\n", dg)
 	fmt.Printf("[pubsub-go] plugin parameter timeout = '%s'\n", to)
 	fmt.Printf("[pubsub-go] plugin parameter byte threshold = '%s'\n", bt)
@@ -163,7 +171,7 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 		Definition: schemaDefinition,
 	}
 
-	keeper, err := NewKeeper(project, topic, jwtPath, &publishSetting, &schemaConfig)
+	keeper, err := NewKeeper(project, topic, &secret, &publishSetting, &schemaConfig)
 	if err != nil {
 		fmt.Printf("[err][init] %+v\n", err)
 		return output.FLB_ERROR

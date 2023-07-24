@@ -27,17 +27,25 @@ type GooglePubSub struct {
 	codec  func(record CodecRecord) ([]byte, error)
 }
 
-func NewKeeper(projectId, topicName, jwtPath string,
+func NewKeeper(projectId string, topicName string, secret *Secret,
 	publishSetting *pubsub.PublishSettings,
 	schemaConfig *pubsub.SchemaConfig,
 ) (Keeper, error) {
-	if projectId == "" || topicName == "" || jwtPath == "" {
+	if projectId == "" || topicName == "" || secret == nil {
 		return nil, fmt.Errorf("[err] NewKeeper empty params")
 	}
 
-	keyBytes, err := os.ReadFile(jwtPath)
-	if err != nil {
-		return nil, errors.Wrap(err, "[err] jwt path")
+	var keyBytes []byte
+	if secret.jwt == "" && secret.jwtPath == "" {
+		return nil, fmt.Errorf("[err] Neither jwtString nor jwtPath")
+	} else if secret.jwt != "" {
+		keyBytes = []byte(secret.jwt)
+	} else if secret.jwtPath != "" {
+		fileBytes, err := os.ReadFile(secret.jwtPath)
+		if err != nil {
+			return nil, errors.Wrap(err, "[err] jwt path")
+		}
+		keyBytes = fileBytes
 	}
 
 	config, err := google.JWTConfigFromJSON(keyBytes, pubsub.ScopePubSub)

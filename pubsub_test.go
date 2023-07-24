@@ -15,8 +15,9 @@ import (
 func TestNewKeeper(t *testing.T) {
 	assert := assert.New(t)
 
+	secret := Secret{"", ""}
 	// Invalid setting
-	_, err := NewKeeper("", "", "", nil, nil)
+	_, err := NewKeeper("", "", &secret, nil, nil)
 	assert.Error(err)
 
 	// minimum settings
@@ -26,12 +27,12 @@ func TestNewKeeper(t *testing.T) {
 	if projectId == "" || topicName == "" || jwtPath == "" {
 		return
 	}
-
-	_, err = NewKeeper(projectId, topicName, jwtPath, nil, nil)
+	secret = Secret{"", jwtPath}
+	_, err = NewKeeper(projectId, topicName, &secret, nil, nil)
 	assert.NoError(err)
 
 	// add publish settings (optional)
-	keeper, err := NewKeeper(projectId, topicName, jwtPath, &pubsub.PublishSettings{
+	keeper, err := NewKeeper(projectId, topicName, &secret, &pubsub.PublishSettings{
 		ByteThreshold:  10,
 		CountThreshold: 10,
 		DelayThreshold: 1 * time.Second,
@@ -43,7 +44,7 @@ func TestNewKeeper(t *testing.T) {
 	assert.Equal(keeper.(*GooglePubSub).topic.PublishSettings.CountThreshold, 10)
 	assert.Equal(keeper.(*GooglePubSub).topic.PublishSettings.ByteThreshold, 10)
 
-	_, err = NewKeeper(projectId, topicName, jwtPath, nil, nil)
+	_, err = NewKeeper(projectId, topicName, &secret, nil, nil)
 	assert.NoError(err)
 
 	// add Avro schema settings (optional)
@@ -53,7 +54,7 @@ func TestNewKeeper(t *testing.T) {
 		Definition: "",
 	}
 
-	keeper, err = NewKeeper(projectId, topicName, jwtPath, nil, avroConfig)
+	keeper, err = NewKeeper(projectId, topicName, &secret, nil, avroConfig)
 	assert.NoError(err)
 	//assert.Equal(keeper.(*GooglePubSub).topic.PublishSettings.Timeout, 5*time.Second)
 	//assert.Equal(keeper.(*GooglePubSub).topic.PublishSettings.DelayThreshold, 1*time.Second)
@@ -65,7 +66,7 @@ func TestNewKeeper(t *testing.T) {
 		Definition: "",
 	}
 
-	keeper, err = NewKeeper(projectId, topicName, jwtPath, nil, protobufConfig)
+	keeper, err = NewKeeper(projectId, topicName, &secret, nil, protobufConfig)
 	assert.NoError(err)
 	//assert.Equal(keeper.(*GooglePubSub).topic.PublishSettings.Timeout, 5*time.Second)
 	//assert.Equal(keeper.(*GooglePubSub).topic.PublishSettings.DelayThreshold, 1*time.Second)
@@ -81,9 +82,9 @@ func TestGooglePubSub_Send(t *testing.T) {
 	if projectId == "" || topicName == "" || jwtPath == "" {
 		return
 	}
-
+	secret = Secret{"", jwtPath}
 	ctx := context.Background()
-	keeper, err := NewKeeper(projectId, topicName, jwtPath, nil, nil)
+	keeper, err := NewKeeper(projectId, topicName, &secret, nil, nil)
 	assert.NoError(err)
 
 	result := keeper.Send(ctx, []byte("aaa"))
@@ -108,8 +109,8 @@ func TestGooglePubSub_Stop(t *testing.T) {
 	if projectId == "" || topicName == "" || jwtPath == "" {
 		return
 	}
-
-	keeper, err := NewKeeper(projectId, topicName, jwtPath, nil, nil)
+	secret = Secret{"", jwtPath}
+	keeper, err := NewKeeper(projectId, topicName, &secret, nil, nil)
 	assert.NoError(err)
 	keeper.Stop()
 }
