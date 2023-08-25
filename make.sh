@@ -9,8 +9,8 @@ CURRENT=`pwd`
 function build
 {
    go build -buildmode=c-shared -o pubsub.so .
-   local osname=`go env | grep GOOS | awk -F "=" '{print $2}' | sed 's/\"//g'`
-   local archname=`go env | grep GOARCH | awk -F "=" '{print $2}' | sed 's/\"//g'`
+   local osname=`go env | grep GOOS | awk -F "=" '{print $2}' | sed "s/['\"]//g"`
+   local archname=`go env | grep GOARCH | awk -F "=" '{print $2}' | sed "s/['\"]//g"`
    mkdir -p $CURRENT/bin/${osname}_${archname} || true
    mv pubsub.so pubsub.h $CURRENT/bin/${osname}_${archname}/
 }
