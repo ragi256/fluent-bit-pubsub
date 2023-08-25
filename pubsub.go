@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 
 	"cloud.google.com/go/pubsub"
 	"github.com/linkedin/goavro"
@@ -18,13 +20,33 @@ type FBRecord = map[interface{}]interface{}
 type Keeper interface {
 	Send(ctx context.Context, data []byte) *pubsub.PublishResult
 	Stop()
-	InterfaceMapToByte(record FBRecord) ([]byte, error)
+	ConvertAvroNative(record FBRecord) ([]byte, error)
 }
 
 type GooglePubSub struct {
-	client *pubsub.Client
-	topic  *pubsub.Topic
-	codec  func(record CodecRecord) ([]byte, error)
+	client    *pubsub.Client
+	topic     *pubsub.Topic
+	codec     func(record CodecRecord) ([]byte, error)
+	schemaMap map[string]AvroDataType
+}
+
+type AvroDataType struct {
+	Type     string
+	Nullable bool
+}
+
+type AvroSchemaMap = map[string]AvroDataType
+
+type AvroField struct {
+	Name    string      `json:"name"`
+	Type    interface{} `json:"type"`
+	Default interface{} `json:"default"`
+}
+
+type AvroSchema struct {
+	Fields []AvroField `json:"fields"`
+	Name   string      `json:"name"`
+	Type   string      `json:"type"`
 }
 
 func NewKeeper(projectId string, topicName string, secret *Secret,
@@ -76,9 +98,15 @@ func NewKeeper(projectId string, topicName string, secret *Secret,
 	var pubs *GooglePubSub
 	switch schemaType {
 	case pubsub.SchemaAvro:
+		var avroSchema AvroSchema
+		if err := json.Unmarshal([]byte(schemaConfig.Definition), &avroSchema); err != nil {
+			return nil, fmt.Errorf("Avro Schema Unmarshal: %v", err)
+		}
+		schemaMap := makeSchemaMap(avroSchema)
+
 		avroCodec, err := goavro.NewCodec(schemaConfig.Definition)
 		if err != nil {
-			return nil, fmt.Errorf("goavro.NewCodec err: %v", err)
+			return nil, fmt.Errorf("Avro NewCodec: %v", err)
 		}
 
 		switch encoding {
@@ -89,7 +117,7 @@ func NewKeeper(projectId string, topicName string, secret *Secret,
 		default:
 			return nil, fmt.Errorf("invalid encoding: %v", encoding)
 		}
-		pubs = &GooglePubSub{client, topic, codec}
+		pubs = &GooglePubSub{client, topic, codec, schemaMap}
 	// case pubsub.SchemaProtocolBuffer: [TODO]
 	//    switch encoding {
 	//    case pubsub.EncodingBinary:
@@ -101,7 +129,7 @@ func NewKeeper(projectId string, topicName string, secret *Secret,
 	//    pubs = &GooglePubSub{client, topic, codec}
 	// }
 	default:
-		pubs = &GooglePubSub{client, topic, nil}
+		pubs = &GooglePubSub{client, topic, nil, nil}
 	}
 	return Keeper(pubs), nil
 }
@@ -117,23 +145,76 @@ func (gps *GooglePubSub) Stop() {
 	gps.topic.Stop()
 }
 
-func (gps *GooglePubSub) InterfaceMapToByte(fbr FBRecord) ([]byte, error) {
+func (gps *GooglePubSub) ConvertAvroNative(fbr FBRecord) ([]byte, error) {
 	cr := make(CodecRecord)
 	for k, v := range fbr {
 		strKey := fmt.Sprintf("%v", k)
-		cv := convert(v)
-		//d := reflect.ValueOf(cv).Kind()
-		//fmt.Printf("[debug] {%v: %v} (%v)\n", k, cv, d)
-		cr[strKey] = cv
+		avroType, ok := gps.schemaMap[strKey]
+		if !ok {
+			continue
+		}
+		cr[strKey] = convert(avroType, v)
 	}
-	return gps.codec(cr)
+
+	a, err := gps.codec(cr)
+	return a, err
 }
 
-func convert(v interface{}) interface{} {
-	switch d := v.(type) {
-	case []byte:
-		return string(d)
+func makeSchemaMap(as AvroSchema) AvroSchemaMap {
+	var m = make(AvroSchemaMap)
+	for _, f := range as.Fields {
+		rv := reflect.ValueOf(f.Type)
+		switch rv.Kind() {
+		case reflect.String:
+			m[f.Name] = AvroDataType{Type: rv.String(), Nullable: false}
+		case reflect.Slice:
+			nullableType := rv.Index(1)
+			switch nullableType.Kind() {
+			case reflect.String:
+				m[f.Name] = AvroDataType{Type: nullableType.String(), Nullable: true}
+			case reflect.Interface:
+				m[f.Name] = AvroDataType{Type: nullableType.Interface().(string), Nullable: true}
+			}
+		}
+	}
+	return m
+}
+
+func convert(at AvroDataType, v interface{}) interface{} {
+	var x interface{}
+
+	switch at.Type {
+	case "boolean":
+		x = v.(bool)
+	case "int":
+		switch v.(type) {
+		case uint64:
+			x = int32(v.(uint64))
+		case int64:
+			x = int32(v.(int64))
+		}
+	case "long":
+		switch v.(type) {
+		case uint64:
+			x = v.(uint64)
+		case int64:
+			x = v.(int64)
+		}
+	case "float":
+		x = float32(v.(float64))
+	case "double":
+		x = v.(float64)
+	case "bytes":
+		x = v.([]byte)
+	case "string":
+		x = string(v.([]byte))
 	default:
-		return d
+		x = v
+	}
+
+	if at.Nullable {
+		return goavro.Union(at.Type, x)
+	} else {
+		return x
 	}
 }

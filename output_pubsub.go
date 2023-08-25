@@ -200,8 +200,8 @@ func FLBPluginFlush(data unsafe.Pointer, length C.int, tag *C.char) int {
 		}
 		timestamp := ts.(output.FLBTime)
 
-		if schemaType == pubsub.SchemaAvro || schemaType == pubsub.SchemaProtocolBuffer {
-			r, err := plugin.InterfaceMapToByte(record)
+		if schemaType == pubsub.SchemaAvro {
+			r, err := plugin.ConvertAvroNative(record)
 			if err != nil {
 				fmt.Printf("[err][publish][don't retry] %+v \n", err)
 			}
