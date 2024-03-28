@@ -92,12 +92,12 @@ func NewKeeper(projectId string, topicName string, secret *Secret,
 	if err != nil {
 		return nil, fmt.Errorf("topic.Config err: %v", err)
 	}
-	encoding := cfg.SchemaSettings.Encoding
 
 	var codec func(record CodecRecord) ([]byte, error)
 	var pubs *GooglePubSub
-	switch schemaType {
-	case pubsub.SchemaAvro:
+	if schemaConfig == nil {
+		pubs = &GooglePubSub{client, topic, nil, nil}
+	} else if schemaConfig.Type == pubsub.SchemaAvro {
 		var avroSchema AvroSchema
 		if err := json.Unmarshal([]byte(schemaConfig.Definition), &avroSchema); err != nil {
 			return nil, fmt.Errorf("Avro Schema Unmarshal: %v", err)
@@ -108,7 +108,7 @@ func NewKeeper(projectId string, topicName string, secret *Secret,
 		if err != nil {
 			return nil, fmt.Errorf("Avro NewCodec: %v", err)
 		}
-
+		encoding := cfg.SchemaSettings.Encoding
 		switch encoding {
 		case pubsub.EncodingBinary:
 			codec = func(record CodecRecord) ([]byte, error) { return avroCodec.BinaryFromNative(nil, record) }
@@ -118,17 +118,19 @@ func NewKeeper(projectId string, topicName string, secret *Secret,
 			return nil, fmt.Errorf("invalid encoding: %v", encoding)
 		}
 		pubs = &GooglePubSub{client, topic, codec, schemaMap}
-	// case pubsub.SchemaProtocolBuffer: [TODO]
-	//    switch encoding {
-	//    case pubsub.EncodingBinary:
-	//        codec = func(record CodecRecord) ([]byte, error) {return ####}
-	//    case pubsub.EncodingJSON:
-	//        codec = func(record CodecRecord) ([]byte, error) {return ####}
-	//    default;
-	//        return nil, fmt.Errorf("invalid encoding: %v", encoding)
-	//    pubs = &GooglePubSub{client, topic, codec}
-	// }
-	default:
+	} else if schemaConfig.Type == pubsub.SchemaProtocolBuffer {
+		// case pubsub.SchemaProtocolBuffer: [TODO]
+		//    switch encoding {
+		//    case pubsub.EncodingBinary:
+		//        codec = func(record CodecRecord) ([]byte, error) {return ####}
+		//    case pubsub.EncodingJSON:
+		//        codec = func(record CodecRecord) ([]byte, error) {return ####}
+		//    default;
+		//        return nil, fmt.Errorf("invalid encoding: %v", encoding)
+		//    pubs = &GooglePubSub{client, topic, codec}
+		// }
+
+	} else {
 		pubs = &GooglePubSub{client, topic, nil, nil}
 	}
 	return Keeper(pubs), nil

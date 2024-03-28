@@ -166,12 +166,15 @@ func FLBPluginInit(ctx unsafe.Pointer) int {
 		DelayThreshold: delayThreshold,
 		Timeout:        timeout,
 	}
-	schemaConfig := pubsub.SchemaConfig{
-		Type:       schemaType,
-		Definition: schemaDefinition,
+	var schemaConfig *pubsub.SchemaConfig
+	if st != "" && sfp == "" {
+		schemaConfig = &pubsub.SchemaConfig{
+			Type:       schemaType,
+			Definition: schemaDefinition,
+		}
 	}
 
-	keeper, err := NewKeeper(project, topic, &secret, &publishSetting, &schemaConfig)
+	keeper, err := NewKeeper(project, topic, &secret, &publishSetting, schemaConfig)
 	if err != nil {
 		fmt.Printf("[err][init] %+v\n", err)
 		return output.FLB_ERROR
